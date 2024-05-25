@@ -1,4 +1,5 @@
 name: Build snapshot
+permissions: write-all
 on:
   workflow_dispatch:
 
