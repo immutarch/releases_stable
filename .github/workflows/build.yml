@@ -1,0 +1,38 @@
+name: Build snapshot
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - name: Prepare build environment
+        run: |
+          pacman-key --init
+          pacman --noconfirm -Syu btrfs-progs archiso git reflector arch-install-scripts
+          reflector > /etc/pacman.d/mirrorlist
+          git clone --recurse-submodules https://github.com/immutarch/builder
+      - name: Build image 
+        run: |
+          mkdir -p $(pwd)/output $(pwd)/workdir
+          bash builder/build.sh --flavor beta --snapshot_ver remote --workdir $(pwd)/workdir --output-dir $(pwd)/output
+          sha256sum $(pwd)/output/$(cat /tmp/build_temp_ver).img.zst | awk '{print $1'} > $(pwd)/output/$(cat /tmp/build_temp_ver).img.zst.sha256
+          echo "BUILDTAG=$(cat /tmp/builder-releasetag)" >> $GITHUB_ENV
+          echo "BUILDIMG=$(cat /tmp/build_temp_ver)" >> $GITHUB_ENV
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.BUILDTAG }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.BUILDIMG }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            output/${{ env.BUILDIMG }}.img.zst
+            output/${{ env.BUILDIMG }}.img.zst.sha256
